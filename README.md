@@ -11,6 +11,9 @@ This project provides a script for batch processing of local images using the `F
 - **Persistent Storage**: Saves processed images to a `modal.Volume` named `batch-processed-images`.
 - **Resumability**: Tracks progress automatically, allowing the script to be re-run to process only the remaining or failed images.
 - **Preserves Structure**: Maintains the original directory structure of the input images in the output location.
+- **Smart Resizing**: Automatically adjusts image resolution for optimal quality with FLUX, preserving aspect ratio by default.
+- **Metadata Storage**: Saves processing parameters (prompt, seed, etc.) directly into the output PNG files for reproducibility.
+- **Memory Optimization**: Uses CPU offloading to handle large models on GPUs with less VRAM.
 
 ## Getting Started
 
@@ -49,10 +52,14 @@ The script will find all images, load the LoRA file, and begin processing. Proce
 You can pass arguments to customize the image generation:
 
 ```bash
-modal run batch_image_processor.py --prompt "A vibrant, abstract painting in the style of a master" --lora-strength 0.85 --guidance-scale 4.0
+modal run batch_image_processor.py --prompt "A vibrant, abstract painting" --lora-strength 0.8 --target-resolution 768 --preserve-aspect-ratio False
 ```
 
 - `--prompt`: The text prompt to guide the image transformation.
 - `--lora-strength`: The weight of the LoRA adapter (from 0.0 to 1.0).
 - `--guidance-scale`: How much the generation should adhere to the prompt.
 - `--num-inference-steps`: The number of steps in the diffusion process.
+- `--target-resolution`: The target resolution for the shorter side of the image (default: 1024).
+- `--preserve-aspect-ratio`: Set to `False` to force square images (default: `True`).
+- `--random-seed-per-image`: Use a random seed for each image instead of a fixed one.
+- `--save-metadata`: Set to `False` to disable saving metadata to PNG files.
