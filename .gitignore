@@ -60,5 +60,5 @@ ENV/
 
 # Project-specific
 imgs/
-lora/
+loras/
 /tmp/stable-diffusion-batch/
