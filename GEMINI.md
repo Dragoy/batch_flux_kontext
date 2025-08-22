@@ -2,11 +2,12 @@
 
 ## Project: Batch Image Processor with FLUX.1-Kontext
 
-This project contains a Python script for batch processing of local images using the `FLUX.1-Kontext-dev` model, accelerated by Modal's GPU infrastructure. It applies transformations based on a text prompt and a LoRA (Low-Rank Adaptation) adapter.
+This project contains Python scripts for batch processing and interactive editing of local images using the `FLUX.1-Kontext-dev` model, accelerated by Modal's GPU infrastructure. It applies transformations based on a text prompt and a LoRA (Low-Rank Adaptation) adapter.
 
 ### Key Features:
 
 - **Batch Processing**: Processes all images from a specified input directory (`imgs/`).
+- **Interactive Web UI**: Provides a Gradio interface for single image editing and batch processing from a web browser.
 - **AI-powered Transformation**: Uses the `black-forest-labs/FLUX.1-Kontext-dev` model via the `diffusers` library.
 - **LoRA Customization**: Applies a `.safetensors` LoRA file from the `lora/` directory to customize the image generation.
 - **Cloud-based GPU**: Leverages `modal.com` for running the intensive processing on high-performance GPUs (e.g., B200).
@@ -16,9 +17,13 @@ This project contains a Python script for batch processing of local images using
 
 ## Core Components
 
-- **`batch_image_processor.py`**: The main script. It contains both the remote Modal class (`BatchProcessor`) for the actual image processing and the local entrypoint (`main`) to orchestrate the task.
+- **`batch_image_processor.py`**: The main script for command-line batch processing. It contains both the remote Modal class (`BatchProcessor`) for the actual image processing and the local entrypoint (`main`) to orchestrate the task.
+- **`flux_kontext_gradio.py`**: A Gradio-based web UI for interactive image editing and batch processing. It allows users to upload images, provide prompts, and see the results in a web interface.
+- **`flux_kontext_gradio_optimized.py`**: A refactored and optimized version of the Gradio UI, with better performance, error handling, and a more modular structure.
 
 ## How to Run
+
+### Command-line Batch Processing
 
 1.  **Prerequisites**:
     - Python 3.12 and required packages installed (`pip install modal diffusers ...`).
@@ -38,3 +43,13 @@ This project contains a Python script for batch processing of local images using
     ```bash
     modal run batch_image_processor.py --prompt "A vibrant, abstract painting" --lora-strength 0.8
     ```
+
+### Interactive Web UI
+
+1. **Prerequisites**: Same as for command-line processing.
+2. **Setup Directories**: Same as for command-line processing.
+3. **Execute the script**:
+    ```bash
+    modal run flux_kontext_gradio_optimized.py
+    ```
+   This will start a web server with the Gradio interface. You can then access it in your browser to interactively edit images.

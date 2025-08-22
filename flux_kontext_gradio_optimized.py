@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # output-directory: /tmp/stable-diffusion
 
-# # Edit images with Flux Kontext (Final, Production-Ready, and Corrected Version)
+# # Edit images with Flux Kontext (Final Production-Ready Version)
 
 # ## Core Imports and Setup
 import logging
@@ -64,10 +64,9 @@ model_image = (
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HOME": str(AppConfig.CACHE_DIR)})
 )
 
-# --- ОКОНЧАТЕЛЬНОЕ ИСПРАВЛЕНИЕ: Устанавливаем последнюю стабильную версию Gradio ---
 web_image = modal.Image.debian_slim(python_version="3.12").pip_install(
     "rich", "fastapi", "pillow", "psutil",
-    "gradio==4.44.1", # Убираем gradio-client, pip установит нужную версию сам
+    "gradio==4.44.1", "pydantic==2.10.6"
 )
 
 app = modal.App("example-image-to-image-final-pretty")
@@ -119,14 +118,19 @@ class Model:
         self.pipe.set_adapters(["lora"], adapter_weights=[lora_strength])
 
     @modal.method()
-    def process_image(self, item, prompt, guidance_scale, num_inference_steps, lora_name, lora_strength):
+    def process_image(self, item, prompt, guidance_scale, num_inference_steps, lora_name, lora_strength, seed):
         start_time = time.time()
         filename = item["filename"]
         with self.inference_lock:
             try:
                 self._manage_lora_safely(lora_name, lora_strength)
                 init_image = load_image(Image.open(BytesIO(item["image_bytes"])))
-                generator = torch.Generator(device=self.device).manual_seed(random.randint(0, 2**32 - 1))
+                # Use provided seed if not -1, otherwise generate random seed
+                if seed == -1:
+                    seed_value = random.randint(0, 2**32 - 1)
+                else:
+                    seed_value = seed
+                generator = torch.Generator(device=self.device).manual_seed(seed_value)
                 result = self.pipe(
                     image=init_image, prompt=prompt, guidance_scale=guidance_scale,
                     num_inference_steps=num_inference_steps, generator=generator,
@@ -201,18 +205,18 @@ def ui():
 - **Total Wall-Clock Time**: ⏱️ {duration:.1f}s
 - **Average Time/Image**: ⚡ {avg_time:.1f}s (True parallel execution)"""
 
-    def handle_batch_process(zip_file, prompt, g_scale, steps, lora, lora_strength, progress=gr.Progress()):
+    def handle_batch_process(zip_file, prompt, g_scale, steps, lora, lora_strength, seed, progress=gr.Progress()):
         if not zip_file: return None, "❌ Error: Please upload a ZIP file."
         if not prompt.strip(): return None, "❌ Error: Please enter a prompt."
         progress(0, desc="🔍 Extracting images...")
         images = extract_images_from_zip(zip_file.name)
         if not images: return None, "❌ Error: No valid images found."
-        
+
         num_images = len(images)
         log.info(f"Starting parallel processing for [cyan]{num_images}[/cyan] images on [cyan]{AppConfig.MODEL_MAX_CONTAINERS}[/cyan] containers.")
         progress(0.1, desc=f"🚀 Processing {num_images} images in parallel...")
-        
-        args = (prompt, g_scale, steps, lora, lora_strength)
+
+        args = (prompt, g_scale, steps, lora, lora_strength, seed)
         starmap_args = [(item, *args) for item in images]
         all_results = []
         start_time = time.time()
@@ -244,8 +248,10 @@ def ui():
                 gr.Markdown(f"**Parallel Processing Enabled:** App will scale up to **{AppConfig.MODEL_MAX_CONTAINERS}** containers.")
                 with gr.Row():
                     with gr.Column():
-                        # --- ИСПРАВЛЕНИЕ: Возвращаем gr.File, так как баг был в версии Gradio ---
-                        zip_upload = gr.File(label="📦 Upload ZIP file", file_types=[".zip"])
+                        # --- ИЗМЕНЕНИЕ: Используем правильный компонент gr.File для загрузки файлов ---
+                        zip_upload = gr.File(label="📦 Upload ZIP file", type="filepath")
+                        batch_output = gr.File(label="📥 Download Processed Images")
+                        
                         batch_prompt = gr.Textbox(label="Batch Edit Prompt", lines=3, value="make this in pokraslampas style")
                         with gr.Row():
                             batch_g_scale = gr.Slider(1.0, 10.0, 2.5, step=0.1, label="Guidance")
@@ -253,11 +259,13 @@ def ui():
                         with gr.Row():
                             batch_lora = gr.Dropdown(lora_choices, value="None", label="LoRA")
                             batch_lora_strength = gr.Slider(0.0, 2.0, 1.0, step=0.05, label="LoRA Strength")
+                        with gr.Row():
+                            batch_seed = gr.Slider(-1, 2147483647, -1, step=1, label="Seed (-1 for random)")
                         process_btn = gr.Button("🚀 Process Batch", variant="primary")
                     with gr.Column():
                         batch_summary = gr.Markdown("📊 Results will appear here.")
-                        batch_output = gr.File(label="📥 Download Processed Images")
-        process_btn.click(fn=handle_batch_process, inputs=[zip_upload, batch_prompt, batch_g_scale, batch_steps, batch_lora, batch_lora_strength], outputs=[batch_output, batch_summary])
+                        
+        process_btn.click(fn=handle_batch_process, inputs=[zip_upload, batch_prompt, batch_g_scale, batch_steps, batch_lora, batch_lora_strength, batch_seed], outputs=[batch_output, batch_summary])
     
     demo.queue(max_size=20)
     web_app = gr.mount_gradio_app(web_app, demo, path="/")
