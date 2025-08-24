@@ -8,6 +8,7 @@ import logging
 import random
 import threading
 import time
+import os
 from io import BytesIO
 from pathlib import Path
 
@@ -38,7 +39,7 @@ class AppConfig:
     GPU_CONFIG = "B200"
     MODEL_MIN_CONTAINERS = 1
     MODEL_MAX_CONTAINERS = 5
-    CONTAINER_SCALEDOWN_WINDOW = 240
+    CONTAINER_SCALEDOWN_WINDOW = 30
     CONTAINER_TIMEOUT = 1800
     WEB_UI_MIN_CONTAINERS = 1
     WEB_UI_MAX_CONTAINERS = 1
@@ -168,6 +169,7 @@ def ui():
     from fastapi import FastAPI
     import zipfile
     import tempfile
+    import os
     
     model = Model()
     
@@ -188,12 +190,28 @@ def ui():
             log.error(f"Failed to extract from ZIP {zip_path}: {e}")
             return []
             
-    def create_output_zip(results):
-        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_file: output_path = tmp_file.name
+    def create_output_zip(results, input_filename=None):
+        # Создание осмысленного имени файла
+        timestamp = int(time.time())
+
+        # Извлечение базового имени из входного файла
+        if input_filename:
+            base_name = os.path.splitext(os.path.basename(input_filename))[0].lower() + "_processed"
+        else:
+            base_name = "batch_processed_images"
+
+        # Формирование финального имени
+        output_filename = f"{base_name}_{timestamp}.zip"
+        output_path = os.path.join("/tmp", output_filename)
+
         successful = [r for r in results if r.get("success")]
-        if not successful: raise ValueError("No successful images to create a ZIP file from.")
+        if not successful:
+            raise ValueError("No successful images to create a ZIP file from.")
+
         with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for result in successful: zf.writestr(result["relative_path"], result["processed_bytes"])
+            for result in successful:
+                zf.writestr(result["relative_path"], result["processed_bytes"])
+
         return output_path
 
     def format_summary_message(results, duration):
@@ -231,7 +249,9 @@ def ui():
         progress(0.98, desc="📦 Creating output archive...")
         
         try:
-            output_zip_path = create_output_zip(all_results)
+            # Передаем имя входного файла в create_output_zip
+            input_filename = zip_file.name if zip_file else None
+            output_zip_path = create_output_zip(all_results, input_filename)
             summary = format_summary_message(all_results, duration)
             progress(1.0, desc="✅ Complete!")
             return output_zip_path, summary
